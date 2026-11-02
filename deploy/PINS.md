@@ -6,8 +6,13 @@ belong in this file.
 
 | Component | Repository | Pin |
 | --- | --- | --- |
-| Backend | `a285292107s/new-api` (this fork) | branch `feature/logdelta-20261102` @ `aeefaac0` |
-| User center | `a285292107s/newapi-user-center` | commit `867cfd2` (release `20261102-1427`) |
+| Backend source | `a285292107s/new-api` (this fork) | branch `feature/logdelta-20261102` @ `30a1d25c` |
+| Backend image | `ghcr.io/a285292107s/new-api` | digest `sha256:a59c96efb51826aec1dbc62367ff9cd678e7ddbae24af997e2556f86104a89ff` |
+| User center | `a285292107s/newapi-user-center` | commit `adc0d0b` (release `20261102-1845`) |
+
+The image is built by `.github/workflows/custom-image.yml` from the commit above
+(amd64, tag `sha-<commit>` and `logdelta`). Deploy by digest, not by tag:
+`docker pull ghcr.io/a285292107s/new-api@sha256:…`.
 
 ## Why a pair
 
