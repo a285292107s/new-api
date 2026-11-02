@@ -83,7 +83,10 @@ func GetUserLogs(c *gin.Context) {
 		}
 		filter.StartTimestamp = startTimestamp
 	}
-	logs, total, err := model.GetUserLogs(c.GetInt("id"), filter, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	// skip_total=1 lets the user center poll for new rows without paying for the
+	// full-range COUNT(*) on every request; total is then returned as -1.
+	skipTotal := c.Query("skip_total") == "1" || c.Query("skip_total") == "true"
+	logs, total, err := model.GetUserLogsPage(c.GetInt("id"), filter, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), skipTotal)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -228,8 +231,6 @@ func GetLogsStat(c *gin.Context) {
 }
 
 func GetLogsSelfStat(c *gin.Context) {
-	username := c.GetString("username")
-	logType, _ := strconv.Atoi(c.Query("type"))
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	if c.GetInt("role") < common.RoleAdminUser {
@@ -243,7 +244,7 @@ func GetLogsSelfStat(c *gin.Context) {
 	modelName := c.Query("model_name")
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
-	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group)
+	quotaNum, err := model.SumUsedQuotaByUserId(c.GetInt("id"), startTimestamp, endTimestamp, modelName, tokenName, channel, group)
 	if err != nil {
 		common.ApiError(c, err)
 		return

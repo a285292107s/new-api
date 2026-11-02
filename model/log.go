@@ -56,11 +56,11 @@ func sanitizeClickHouseLikePattern(input string) (string, error) {
 
 type Log struct {
 	Id                int    `json:"id" gorm:"index:idx_created_at_id,priority:2;index:idx_user_id_id,priority:2"`
-	UserId            int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
-	CreatedAt         int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type"`
-	Type              int    `json:"type" gorm:"index:idx_created_at_type"`
+	UserId            int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1;index:idx_logs_user_created,priority:1"`
+	CreatedAt         int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:1;index:idx_created_at_type;index:idx_logs_user_created,priority:2;index:idx_logs_username_type_created,priority:3"`
+	Type              int    `json:"type" gorm:"index:idx_created_at_type;index:idx_logs_username_type_created,priority:2"`
 	Content           string `json:"content"`
-	Username          string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
+	Username          string `json:"username" gorm:"index;index:index_username_model_name,priority:2;index:idx_logs_username_type_created,priority:1;default:''"`
 	TokenName         string `json:"token_name" gorm:"index;default:''"`
 	ModelName         string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
 	Quota             int    `json:"quota" gorm:"default:0"`
@@ -590,14 +590,29 @@ func GetAllLogs(filter LogFilter, startIdx int, num int) (logs []*Log, total int
 const logSearchCountLimit = 10000
 
 func GetUserLogs(userId int, filter LogFilter, startIdx int, num int) (logs []*Log, total int64, err error) {
+	return GetUserLogsPage(userId, filter, startIdx, num, false)
+}
+
+// GetUserLogsPage is GetUserLogs with an optional COUNT(*).
+//
+// When skipTotal is true the full-range COUNT query is skipped and total is
+// returned as -1. Callers that only need to know "is there anything newer than
+// the last row I have" (the user center's log page polling) use this to avoid
+// paying for COUNT on every poll; the page size and rows are unaffected.
+func GetUserLogsPage(userId int, filter LogFilter, startIdx int, num int, skipTotal bool) (logs []*Log, total int64, err error) {
 	tx, err := filter.apply(LOG_DB.Where("logs.user_id = ?", userId))
 	if err != nil {
 		return nil, 0, err
 	}
-	err = tx.Model(&Log{}).Limit(logSearchCountLimit).Count(&total).Error
-	if err != nil {
-		common.SysError(common.LogText("failed to count user logs: %s", err.Error()))
-		return nil, 0, common.NewMessage("Failed to query logs")
+	if skipTotal {
+		// -1 tells the caller the count was intentionally omitted.
+		total = -1
+	} else {
+		err = tx.Model(&Log{}).Limit(logSearchCountLimit).Count(&total).Error
+		if err != nil {
+			common.SysError(common.LogText("failed to count user logs: %s", err.Error()))
+			return nil, 0, common.NewMessage("Failed to query logs")
+		}
 	}
 	order := "logs.id desc"
 	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
@@ -745,6 +760,69 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	stat.Rpm = rateStat.Rpm
 	stat.Tpm = rateStat.Tpm
 
+	return stat, nil
+}
+
+// SumUsedQuotaByUserId is the user-self variant of SumUsedQuota.
+//
+// It filters by user_id instead of the mutable username, so a renamed user
+// keeps a stable history. The two metrics keep their original shapes: quota
+// follows the requested range, while rpm/tpm always look at the last 60
+// seconds. They stayed as two queries on purpose: folding them into one
+// conditional aggregate made PostgreSQL fall back to a Seq Scan over the whole
+// range (11.4 ms vs 5.8 ms for the two-query form at 1,943 rows), because the
+// CASE expressions cannot use the composite index for the rate part.
+func SumUsedQuotaByUserId(userId int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, channel int, group string) (stat Stat, err error) {
+	tx := LOG_DB.Table("logs").
+		Select("COALESCE(sum(quota), 0) quota").
+		Where("user_id = ? AND type = ?", userId, LogTypeConsume)
+	rpmTpmQuery := LOG_DB.Table("logs").
+		Select("count(*) rpm, COALESCE(sum(prompt_tokens), 0) + COALESCE(sum(completion_tokens), 0) tpm").
+		Where("user_id = ? AND type = ?", userId, LogTypeConsume)
+
+	if tx, err = applyExplicitLogTextFilter(tx, "model_name", modelName); err != nil {
+		return stat, err
+	}
+	if rpmTpmQuery, err = applyExplicitLogTextFilter(rpmTpmQuery, "model_name", modelName); err != nil {
+		return stat, err
+	}
+	if tokenName != "" {
+		tx = tx.Where("token_name = ?", tokenName)
+		rpmTpmQuery = rpmTpmQuery.Where("token_name = ?", tokenName)
+	}
+	if startTimestamp != 0 {
+		tx = tx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("created_at <= ?", endTimestamp)
+	}
+	if channel != 0 {
+		tx = tx.Where("channel_id = ?", channel)
+		rpmTpmQuery = rpmTpmQuery.Where("channel_id = ?", channel)
+	}
+	if group != "" {
+		tx = tx.Where(logGroupCol+" = ?", group)
+		rpmTpmQuery = rpmTpmQuery.Where(logGroupCol+" = ?", group)
+	}
+
+	// Only rpm/tpm are pinned to the last 60 seconds; the range filters above
+	// intentionally apply to quota only.
+	rpmTpmQuery = rpmTpmQuery.Where("created_at >= ?", time.Now().Add(-60*time.Second).Unix())
+
+	if err := tx.Scan(&stat).Error; err != nil {
+		common.SysError(common.LogText("failed to query user log stat: %s", err.Error()))
+		return stat, common.NewMessage("Failed to query statistics")
+	}
+	var rateStat struct {
+		Rpm int
+		Tpm int
+	}
+	if err := rpmTpmQuery.Scan(&rateStat).Error; err != nil {
+		common.SysError(common.LogText("failed to query user log rate stat: %s", err.Error()))
+		return stat, common.NewMessage("Failed to query statistics")
+	}
+	stat.Rpm = rateStat.Rpm
+	stat.Tpm = rateStat.Tpm
 	return stat, nil
 }
 

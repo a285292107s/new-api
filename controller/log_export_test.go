@@ -214,6 +214,41 @@ func TestLogExportRules(t *testing.T) {
 	})
 }
 
+func TestLogSelfSkipTotalAndStatParity(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, _ := newAuditTestDatabase(t, "sqlite", "")
+	useLogExportDatabases(t, db, db, common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+	require.NoError(t, db.AutoMigrate(&model.Channel{}, &model.Log{}, &model.QuotaData{}))
+	now := time.Now().Unix()
+	seedExportLogs(t, db, db, now)
+	// A consume log inside the rpm/tpm window, so the stats have both parts.
+	require.NoError(t, db.Create(&model.Log{
+		UserId: 1, Username: "alice", CreatedAt: now - 5, Type: model.LogTypeConsume,
+		ModelName: "gpt-a", Quota: 100, PromptTokens: 30, CompletionTokens: 20, RequestId: "a-3",
+	}).Error)
+	recent := fmt.Sprintf("start_timestamp=%d&end_timestamp=%d", now-2*24*3600, now)
+
+	withTotal := callLogHandler(t, GetUserLogs, 1, common.RoleCommonUser, recent)[0]
+	require.Equal(t, true, withTotal["success"])
+	assert.EqualValues(t, 3, withTotal["data"].(map[string]any)["total"])
+
+	skipped := callLogHandler(t, GetUserLogs, 1, common.RoleCommonUser, recent+"&skip_total=1")[0]
+	require.Equal(t, true, skipped["success"])
+	assert.EqualValues(t, -1, skipped["data"].(map[string]any)["total"], "skip_total must skip COUNT and report -1")
+	assert.Len(t, skipped["data"].(map[string]any)["items"], 3, "rows are unaffected by skip_total")
+
+	// The user-self stat must keep the same numbers as the username-based
+	// aggregation while filtering by the stable user id.
+	self := callLogHandler(t, GetLogsSelfStat, 1, common.RoleCommonUser, recent)[0]
+	require.Equal(t, true, self["success"])
+	want, err := model.SumUsedQuota(model.LogTypeConsume, now-2*24*3600, now, "", "alice", "", 0, "")
+	require.NoError(t, err)
+	data := self["data"].(map[string]any)
+	assert.EqualValues(t, want.Quota, data["quota"])
+	assert.EqualValues(t, want.Rpm, data["rpm"])
+	assert.EqualValues(t, want.Tpm, data["tpm"])
+}
+
 func TestAcquireLogExportLock(t *testing.T) {
 	for _, useRedis := range []bool{false, true} {
 		t.Run(fmt.Sprintf("redis=%v", useRedis), func(t *testing.T) {
