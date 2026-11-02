@@ -7,6 +7,19 @@ on:
   push:
     branches:
       - 'feature/**'
+    # 只有影响镜像内容的改动才触发，文档/部署说明的提交不重复构建
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'relaykit/**'
+      - 'tokenkit/**'
+      - 'web/**'
+      - 'plugins/**'
+      - 'i18n/**'
+      - 'VERSION'
+      - 'Dockerfile'
+      - '.github/workflows/custom-image.yml'
   workflow_dispatch:
 
 concurrency:
