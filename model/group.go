@@ -231,6 +231,25 @@ func EnsureGroupsInitialized() error {
 	return syncGroupsWithSettings()
 }
 
+// EnsureSettingGroupsRegistered registers only the group names referenced by the
+// current settings snapshots. It is cheap enough for settings update hooks: it
+// skips the historical row scan that EnsureGroupsInitialized performs.
+func EnsureSettingGroupsRegistered() error {
+	names := make(map[string]struct{})
+	collectSettingsGroupNames(names)
+	ordered := make([]string, 0, len(names))
+	for name := range names {
+		ordered = append(ordered, name)
+	}
+	sort.Strings(ordered)
+	for _, name := range ordered {
+		if err := ensureGroupRow(name); err != nil {
+			return err
+		}
+	}
+	return syncGroupsWithSettings()
+}
+
 func ensureGroupRow(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" || name == GroupNameAuto {
@@ -329,6 +348,30 @@ func syncGroupsWithSettings() error {
 // seeding.
 func CollectReferencedGroupNames() ([]string, error) {
 	names := make(map[string]struct{})
+	collectSettingsGroupNames(names)
+
+	dbNames, err := collectPersistedGroupNames(DB)
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range dbNames {
+		names[name] = struct{}{}
+	}
+
+	result := make([]string, 0, len(names))
+	for name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" || name == GroupNameAuto {
+			continue
+		}
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+// collectSettingsGroupNames gathers group names referenced by group settings.
+func collectSettingsGroupNames(names map[string]struct{}) {
 	for name := range ratio_setting.GetGroupRatioCopy() {
 		names[name] = struct{}{}
 	}
@@ -356,25 +399,6 @@ func CollectReferencedGroupNames() ([]string, error) {
 	for name := range setting.GetModelRequestRateLimitGroupCopy() {
 		names[name] = struct{}{}
 	}
-
-	dbNames, err := collectPersistedGroupNames(DB)
-	if err != nil {
-		return nil, err
-	}
-	for _, name := range dbNames {
-		names[name] = struct{}{}
-	}
-
-	result := make([]string, 0, len(names))
-	for name := range names {
-		name = strings.TrimSpace(name)
-		if name == "" || name == GroupNameAuto {
-			continue
-		}
-		result = append(result, name)
-	}
-	sort.Strings(result)
-	return result, nil
 }
 
 func quoteGroupColumn(db *gorm.DB, column string) string {

@@ -145,6 +145,35 @@ func TestEnsureGroupsInitializedSeedsRegistryFromSettingsAndData(t *testing.T) {
 	require.ErrorIs(t, err, ErrGroupNotFound)
 }
 
+func TestEnsureSettingGroupsRegisteredSkipsHistoricalRows(t *testing.T) {
+	truncateTables(t)
+	preserveGroupSettings(t)
+	seedGroupSettings(t)
+
+	// Historical rows may reference groups that are no longer configured; the
+	// lightweight refresh must not resurrect them.
+	require.NoError(t, DB.Create(&User{
+		Username: "historical-user",
+		Password: "unused-password-hash",
+		Group:    "historical-only",
+		AffCode:  "historical-aff-code",
+	}).Error)
+
+	require.NoError(t, EnsureSettingGroupsRegistered())
+
+	_, err := GetGroupByName("historical-only")
+	require.ErrorIs(t, err, ErrGroupNotFound)
+	_, err = GetGroupByName("vip")
+	require.NoError(t, err)
+
+	// Newly configured groups are registered without a restart.
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"vip":0.8,"svip":0.6,"trial":0.5}`))
+	require.NoError(t, EnsureSettingGroupsRegistered())
+	trial, err := GetGroupByName("trial")
+	require.NoError(t, err)
+	require.InDelta(t, 0.5, trial.Ratio, 1e-9)
+}
+
 func TestRenameGroupRewritesEveryProjection(t *testing.T) {
 	truncateTables(t)
 	preserveGroupSettings(t)
