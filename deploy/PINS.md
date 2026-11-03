@@ -14,6 +14,17 @@ The image is built by `.github/workflows/custom-image.yml` from the commit above
 (amd64, tag `sha-<full-commit>` and `logdelta`). Deploy by digest, not by tag:
 `docker pull ghcr.io/a285292107s/new-api@sha256:…`.
 
+## Deployment record
+
+- `2026-11-03 22:06` (Asia/Shanghai): deployed the digest above to production.
+  `health=healthy`; `/api/status`, `/api/pricing`, `/` returned 200; the new
+  `groups` table was seeded with the existing groups. Pre-deploy backups on the
+  server: database dump `newapi-pre-ghcr-20261103-220626.sql.gz` and compose
+  `docker-compose.yml.bak-ghcr-20261103-220626`.
+- Before deployment, the same image was validated on a staging container against
+  a read-only copy of the production database (registry read, atomic rename,
+  log endpoints).
+
 ## Source policy (since 2026-11-03)
 
 - **The fork is the authoritative source.** All backend changes happen in
