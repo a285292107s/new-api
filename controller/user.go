@@ -665,6 +665,14 @@ func UpdateUser(c *gin.Context) {
 		common.ApiErrorT(c, "Invalid input {{error}}", map[string]any{"error": err.Error()})
 		return
 	}
+	if updatedUser.Group != "" {
+		normalizedGroup, err := model.NormalizeGroupName(updatedUser.Group)
+		if err != nil {
+			common.ApiErrorT(c, "Invalid group name: {{error}}", map[string]any{"error": err.Error()})
+			return
+		}
+		updatedUser.Group = normalizedGroup
+	}
 	originUser, err := model.GetUserById(updatedUser.Id, false)
 	if err != nil {
 		common.ApiError(c, err)

@@ -333,6 +333,12 @@ func AddToken(c *gin.Context) {
 		common.ApiErrorT(c, "Maximum number of tokens reached ({{max}})", map[string]any{"max": maxTokens})
 		return
 	}
+	normalizedGroup, err := model.NormalizeAssignableGroupName(token.Group)
+	if err != nil {
+		common.ApiErrorT(c, "Invalid token group: {{error}}", map[string]any{"error": err.Error()})
+		return
+	}
+	token.Group = normalizedGroup
 	if token.Group == "auto" {
 		if !setTokenAutoGroups(c, &token, request.AutoGroups.Groups) {
 			return
@@ -459,7 +465,12 @@ func UpdateToken(c *gin.Context) {
 		if request.AllowUserQuotaQuery != nil {
 			cleanToken.AllowUserQuotaQuery = *request.AllowUserQuotaQuery
 		}
-		cleanToken.Group = token.Group
+		normalizedGroup, err := model.NormalizeAssignableGroupName(token.Group)
+		if err != nil {
+			common.ApiErrorT(c, "Invalid token group: {{error}}", map[string]any{"error": err.Error()})
+			return
+		}
+		cleanToken.Group = normalizedGroup
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
 		if token.Group != "auto" {
 			cleanToken.CrossGroupRetry = false

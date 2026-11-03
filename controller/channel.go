@@ -535,6 +535,13 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 	if err := channel.ValidateSettings(); err != nil {
 		return common.NewMessage("Invalid channel settings format: {{error}}", map[string]any{"error": err.Error()})
 	}
+
+	// 归一化分组列：去空白、去重复、拒绝会破坏逗号分隔语义的分组名
+	normalizedGroups, err := model.NormalizeChannelGroupNames(channel.Group)
+	if err != nil {
+		return common.NewMessage("Invalid channel group: {{error}}", map[string]any{"error": err.Error()})
+	}
+	channel.Group = normalizedGroups
 	if channel.Type == constant.ChannelTypeTaskPlugin {
 		pluginKey := strings.TrimSpace(channel.GetSetting().TaskPluginKey)
 		if pluginKey == "" {

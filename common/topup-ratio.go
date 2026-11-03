@@ -29,6 +29,19 @@ func UpdateTopupGroupRatioByJSONString(jsonStr string) error {
 	return json.Unmarshal([]byte(jsonStr), &topupGroupRatio)
 }
 
+// GetTopupGroupRatioCopy returns every configured topup ratio keyed by group
+// name. Used by the group registry to mirror settings and to rewrite keys on
+// rename.
+func GetTopupGroupRatioCopy() map[string]float64 {
+	topupGroupRatioMutex.RLock()
+	defer topupGroupRatioMutex.RUnlock()
+	copied := make(map[string]float64, len(topupGroupRatio))
+	for name, ratio := range topupGroupRatio {
+		copied[name] = ratio
+	}
+	return copied
+}
+
 func GetTopupGroupRatio(name string) float64 {
 	topupGroupRatioMutex.RLock()
 	defer topupGroupRatioMutex.RUnlock()
