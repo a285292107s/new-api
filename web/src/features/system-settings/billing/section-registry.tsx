@@ -22,6 +22,7 @@ import { CheckinSettingsSection } from '../general/checkin-settings-section'
 import { PricingSection } from '../general/pricing-section'
 import { QuotaSettingsSection } from '../general/quota-settings-section'
 import { PaymentSettingsSection } from '../integrations/payment-settings-section'
+import { GroupRegistryCard } from '../models/group-registry-card'
 import { RatioSettingsCard } from '../models/ratio-settings-card'
 import type { BillingSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
@@ -119,13 +120,16 @@ const BILLING_SECTIONS = [
     id: 'group-pricing',
     titleKey: 'Group Pricing',
     build: (settings: BillingSettings) => (
-      <RatioSettingsCard
-        titleKey='Group Pricing'
-        modelDefaults={getModelDefaults(settings)}
-        groupDefaults={getGroupDefaults(settings)}
-        toolPricesDefault={settings['tool_price_setting.prices']}
-        visibleTabs={['groups']}
-      />
+      <div className='space-y-6'>
+        <RatioSettingsCard
+          titleKey='Group Pricing'
+          modelDefaults={getModelDefaults(settings)}
+          groupDefaults={getGroupDefaults(settings)}
+          toolPricesDefault={settings['tool_price_setting.prices']}
+          visibleTabs={['groups']}
+        />
+        <GroupRegistryCard />
+      </div>
     ),
   },
   {

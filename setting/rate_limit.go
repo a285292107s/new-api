@@ -44,6 +44,17 @@ func UpdateModelRequestRateLimitGroupByJSONString(jsonStr string) error {
 	return common.Unmarshal([]byte(jsonStr), &ModelRequestRateLimitGroup)
 }
 
+// GetModelRequestRateLimitGroupCopy returns the configured per-group limits.
+func GetModelRequestRateLimitGroupCopy() map[string][2]int {
+	ModelRequestRateLimitMutex.RLock()
+	defer ModelRequestRateLimitMutex.RUnlock()
+	copied := make(map[string][2]int, len(ModelRequestRateLimitGroup))
+	for group, limits := range ModelRequestRateLimitGroup {
+		copied[group] = limits
+	}
+	return copied
+}
+
 func GetGroupRateLimit(group string) (totalCount, successCount int, found bool) {
 	ModelRequestRateLimitMutex.RLock()
 	defer ModelRequestRateLimitMutex.RUnlock()

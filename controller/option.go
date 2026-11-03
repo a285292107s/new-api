@@ -182,6 +182,17 @@ func writePasskeyDomainSettingsError(c *gin.Context, err error) {
 	common.ApiError(c, err)
 }
 
+// isGroupSettingKey reports whether an option key influences the group
+// registry (known group names, ratios or membership lists).
+func isGroupSettingKey(key string) bool {
+	switch key {
+	case "GroupRatio", "GroupGroupRatio", "UserUsableGroups", "TopupGroupRatio",
+		"AutoGroups", "ModelRequestRateLimitGroup":
+		return true
+	}
+	return strings.HasPrefix(key, "group_ratio_setting.")
+}
+
 func UpdateOption(c *gin.Context) {
 	var option OptionUpdateRequest
 	err := common.DecodeJson(c.Request.Body, &option)
@@ -424,6 +435,12 @@ func UpdateOption(c *gin.Context) {
 			common.ApiError(c, err)
 		}
 		return
+	}
+	if isGroupSettingKey(option.Key) {
+		// 分组配置变更后立即把新分组登记到注册表，避免必须重启才可见。
+		if err := model.EnsureSettingGroupsRegistered(); err != nil {
+			common.SysError("failed to refresh group registry: " + err.Error())
+		}
 	}
 	// 出于安全考虑只记录被修改的配置项名称，不记录配置值（可能含密钥等敏感信息）。
 	recordManageAudit(c, "option.update", map[string]any{

@@ -196,6 +196,11 @@ func InitOptionMap() {
 
 	common.OptionMapRWMutex.Unlock()
 	loadOptionsFromDatabase()
+	// The group registry mirrors the group settings that were just loaded, so it
+	// must be seeded after the database options are applied.
+	if err := EnsureGroupsInitialized(); err != nil {
+		common.SysError(common.LogText("failed to initialize group registry: %s", err.Error()))
+	}
 }
 
 func loadOptionsFromDatabase() {

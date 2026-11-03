@@ -66,6 +66,35 @@ export async function getUserGroups(): Promise<{
   return res.data
 }
 
+export type GroupRegistryItem = {
+  id: number
+  name: string
+  ratio: number
+  topup_ratio: number
+  description: string
+  auto_enabled: boolean
+  sort: number
+  references?: Record<string, number>
+}
+
+export async function getGroupRegistry(): Promise<{
+  success: boolean
+  message?: string
+  data?: GroupRegistryItem[]
+}> {
+  const res = await api.get('/api/group/registry')
+  return res.data
+}
+
+export async function renameGroup(id: number, name: string): Promise<{
+  success: boolean
+  message?: string
+  data?: { old_name: string; new_name: string }
+}> {
+  const res = await api.post('/api/group/rename', { id, name })
+  return res.data
+}
+
 // ============================================================================
 // System APIs
 // ============================================================================

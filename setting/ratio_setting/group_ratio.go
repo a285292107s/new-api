@@ -63,6 +63,16 @@ func GetGroupRatioCopy() map[string]float64 {
 	return groupRatioMap.ReadAll()
 }
 
+// GetGroupSpecialUsableGroupCopy returns a shallow copy of the per-user-group
+// override map. Callers must not mutate the nested maps; they are shared with
+// the live setting.
+func GetGroupSpecialUsableGroupCopy() map[string]map[string]string {
+	if groupRatioSetting.GroupSpecialUsableGroup == nil {
+		return map[string]map[string]string{}
+	}
+	return groupRatioSetting.GroupSpecialUsableGroup.ReadAll()
+}
+
 func ContainsGroupRatio(name string) bool {
 	_, ok := groupRatioMap.Get(name)
 	return ok
@@ -99,6 +109,13 @@ func GetGroupGroupRatio(userGroup, usingGroup string) (float64, bool) {
 
 func GroupGroupRatio2JSONString() string {
 	return groupGroupRatioMap.MarshalJSONString()
+}
+
+// GetGroupGroupRatioCopy returns a shallow copy of the user-group -> using-group
+// ratio matrix. Callers must not mutate the nested maps; they are shared with
+// the live setting.
+func GetGroupGroupRatioCopy() map[string]map[string]float64 {
+	return groupGroupRatioMap.ReadAll()
 }
 
 func UpdateGroupGroupRatioByJSONString(jsonStr string) error {
