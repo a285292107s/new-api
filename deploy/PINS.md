@@ -6,13 +6,26 @@ belong in this file.
 
 | Component | Repository | Pin |
 | --- | --- | --- |
-| Backend source | `a285292107s/new-api` (this fork) | branch `feature/logdelta-20261102` @ `30a1d25c` |
-| Backend image | `ghcr.io/a285292107s/new-api` | digest `sha256:a59c96efb51826aec1dbc62367ff9cd678e7ddbae24af997e2556f86104a89ff` |
-| User center | `a285292107s/newapi-user-center` | commit `d923e4c` (release `20261102-2155`) |
+| Backend source | `a285292107s/new-api` (this fork) | branch `feature/logdelta-20261102` @ `40a658af` (upstream base `ba5f7367`) |
+| Backend image | `ghcr.io/a285292107s/new-api` | digest `sha256:12e7b5ede2533cb32b453fd492ceae31fa187d3110c475bf0a332e26298062e3` |
+| User center | `a285292107s/newapi-user-center` | commit `5a3ce52` (release `20261103-1002`) |
 
 The image is built by `.github/workflows/custom-image.yml` from the commit above
-(amd64, tag `sha-<commit>` and `logdelta`). Deploy by digest, not by tag:
+(amd64, tag `sha-<full-commit>` and `logdelta`). Deploy by digest, not by tag:
 `docker pull ghcr.io/a285292107s/new-api@sha256:…`.
+
+## Source policy (since 2026-11-03)
+
+- **The fork is the authoritative source.** All backend changes happen in
+  `a285292107s/new-api`, never against upstream directly.
+- `main` only mirrors upstream (`git push origin upstream/main:main`) and carries
+  no custom commits.
+- `feature/logdelta-20261102` is the production branch: it carries every custom
+  change (log `skip_total` patch, group registry) on top of the upstream base
+  recorded above.
+- Upstream updates are merged deliberately: rebase/merge `upstream/main`, then
+  run the full regression (`go build ./...`, `go vet ./model/ ./controller/`,
+  `go test ./model/`) before an image is cut.
 
 ## Why a pair
 
@@ -35,7 +48,9 @@ The user-center log page polls with
 
 ## Rollback
 
-- Backend: redeploy the previous image tag/digest (the official
-  `calciumion/new-api:v1.0.0-rc.47` image also works — the frontend degrades
-  gracefully to whole-page polling).
+- Backend: redeploy the previous image tag/digest. Last known-good pre-group-registry
+  digest: `sha256:a59c96efb51826aec1dbc62367ff9cd678e7ddbae24af997e2556f86104a89ff`
+  (the group registry only adds a `groups` table via `AutoMigrate`; an older image
+  simply ignores it). The official `calciumion/new-api:v1.0.0-rc.47` image also
+  works — the frontend degrades gracefully to whole-page polling.
 - Frontend: repoint `current` at the previous release directory.
