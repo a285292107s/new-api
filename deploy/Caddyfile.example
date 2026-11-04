@@ -4,7 +4,17 @@
 #   www.mydeepseek.top    -> 301 到主域
 #   loli.mydeepseek.top   -> 用户中心 SPA（/var/www/loli.mydeepseek.top/current）
 #                            /api/* /v1/* 反代 127.0.0.1:3000
-#   api.mydeepseek.top    -> /api /v1 直连源站（未走 CDN）
+#   api.mydeepseek.top    -> /api /v1 反代 127.0.0.1:3000（经 EdgeOne 回源）
+#
+# 边缘层（DNS，2026-11-04 实测；与下面 Caddy 站点块是两层，勿混为一谈）：
+#   mydeepseek.top / www  -> A 207.57.120.199，DNS 直连源站，未接 CDN
+#   loli / api 两个子域   -> CNAME <name>.eo.dnse3.com（腾讯 EdgeOne），
+#                            边缘节点 43.174.246.67 / 43.174.247.67，
+#                            回源到 207.57.120.199:443 的 Caddy
+#   即 api.mydeepseek.top 是「走 CDN」的；下方 reverse_proxy 只描述
+#   Caddy 收到回源请求后怎么走，不能据此推断「未走 CDN」。
+#   EdgeOne 对 /v1/* 不缓存（EO-Cache-Status: MISS），其 15s 回源超时
+#   曾导致 opencode 线路 524，见 out/中转站-opencode线路-524修复方案-2026-11-03.md。
 #
 # 用户中心是独立仓库 `a285292107s/newapi-user-center` 的静态产物，按
 # `releases/<ts>/` + `current` 软链原子发布，配对记录见 `deploy/PINS.md`。
@@ -64,7 +74,7 @@ loli.mydeepseek.top {
 	}
 }
 
-# API 专用子域名（/v1 与 /api 直连源站，未走 CDN）
+# API 专用子域名（客户端经 EdgeOne 接入，Caddy 侧把 /v1 与 /api 反代到 127.0.0.1:3000）
 api.mydeepseek.top {
 	encode zstd gzip
 	reverse_proxy 127.0.0.1:3000
