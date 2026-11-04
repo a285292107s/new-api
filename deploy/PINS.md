@@ -8,7 +8,7 @@ belong in this file.
 | --- | --- | --- |
 | Backend source | `a285292107s/new-api` (this fork) | branch `feature/logdelta-20261102` @ `40a658af` (upstream base `ba5f7367`) |
 | Backend image | `ghcr.io/a285292107s/new-api` | digest `sha256:12e7b5ede2533cb32b453fd492ceae31fa187d3110c475bf0a332e26298062e3` |
-| User center | `a285292107s/newapi-user-center` | commit `5a3ce52` (release `20261103-1002`) |
+| User center | `a285292107s/newapi-user-center` | commit `6eb5779` (release `20261104-1505`) |
 
 The image is built by `.github/workflows/custom-image.yml` from the commit above
 (amd64, tag `sha-<full-commit>` and `logdelta`). Deploy by digest, not by tag:
@@ -16,6 +16,12 @@ The image is built by `.github/workflows/custom-image.yml` from the commit above
 
 ## Deployment record
 
+- `2026-11-04 15:05` (Asia/Shanghai): user-center release `20261104-1505`
+  deployed (commit `6eb5779`, `assets/index-BJwjqyrT.js` +
+  `assets/index-0QGDq6D5.css`). Adds the admin-only `/admin/users` page
+  (list/search/group filter/quota adjust) gated by `role >= 10`; the previous
+  release `20261103-1426` is kept for rollback. Verified `/`, `/admin/users`,
+  assets, `/api/status` at 200 and admin APIs at 401 without a token.
 - `2026-11-03 22:06` (Asia/Shanghai): deployed the digest above to production.
   `health=healthy`; `/api/status`, `/api/pricing`, `/` returned 200; the new
   `groups` table was seeded with the existing groups. Pre-deploy backups on the
