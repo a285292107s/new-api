@@ -56,6 +56,8 @@
 
 ---
 
+> 📋 This project is tracked on the dsh-superagent task board.
+
 ## 📝 Project Description
 
 New API is a self-hosted AI gateway for applications, agents, and teams. Connect upstream model services, expose a consistent API to your clients, and manage routing, access, usage, and costs in one place.
