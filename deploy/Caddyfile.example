@@ -1,0 +1,77 @@
+# /etc/caddy/Caddyfile — 当前生产拓扑（2026-11-04 核对线上配置）
+#
+#   mydeepseek.top        -> 上游 new-api 后端（内嵌官方前端 + /api + /v1 中转）
+#   www.mydeepseek.top    -> 301 到主域
+#   loli.mydeepseek.top   -> 用户中心 SPA（/var/www/loli.mydeepseek.top/current）
+#                            /api/* /v1/* 反代 127.0.0.1:3000
+#   api.mydeepseek.top    -> /api /v1 直连源站（未走 CDN）
+#
+# 用户中心是独立仓库 `a285292107s/newapi-user-center` 的静态产物，按
+# `releases/<ts>/` + `current` 软链原子发布，配对记录见 `deploy/PINS.md`。
+# 两个前端共用同一个后端、同一套账号与令牌；用户中心按 `role >= 10` 在站内
+# 显示管理员功能，不设独立 admin 子域。
+#
+# 演进方向：用户中心长期留在 `loli` 子域上迭代，逐步在功能上取代上游内嵌前端。
+# 「收成单域名 + admin 子域」的迁移方案已废弃，`CADDY_SINGLE_DOMAIN.md` 已淘汰；
+# 本文件只描述现状，不代表未来要改 host。
+#
+# 校验：caddy validate --config /etc/caddy/Caddyfile
+# 生效：systemctl reload caddy
+
+mydeepseek.top {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+}
+
+www.mydeepseek.top {
+	redir https://mydeepseek.top{uri} permanent
+}
+
+loli.mydeepseek.top {
+	encode zstd gzip
+	root * /var/www/loli.mydeepseek.top/current
+
+	# 用户中心的 API 全走相对路径；这里只需放行 /api/* 与 /v1/*。
+	# 完整的中转协议前缀白名单（/v1beta/* /mj/* /pg/* 等）在主域与 api 子域上，
+	# 此处刻意不重复，勿据此推断 loli 支持全部协议。
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+	handle /v1/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+
+	# index.html / SPA 回退路由必须每次向服务器校验，避免旧 HTML 命中浏览器缓存后
+	# 一直指向已删除的旧 asset（表现为「部署了但用户看到的还是旧版本」）。
+	@notAssets not path /assets/*
+	header @notAssets Cache-Control "public, max-age=0, s-maxage=30"
+	header /assets/* Cache-Control "public, max-age=31536000, immutable"
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+}
+
+# API 专用子域名（/v1 与 /api 直连源站，未走 CDN）
+api.mydeepseek.top {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:3000
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+}

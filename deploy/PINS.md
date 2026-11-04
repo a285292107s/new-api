@@ -14,6 +14,24 @@ The image is built by `.github/workflows/custom-image.yml` from the commit above
 (amd64, tag `sha-<full-commit>` and `logdelta`). Deploy by digest, not by tag:
 `docker pull ghcr.io/a285292107s/new-api@sha256:…`.
 
+## Frontend direction (decided 2026-11-04)
+
+- The user center stays on `loli.mydeepseek.top`. It is published as a static
+  SPA from the sibling repo `a285292107s/newapi-user-center` via `releases/<ts>/`
+  plus the `current` symlink; a frontend release does not touch the backend,
+  the database or the API host.
+- **No single-domain migration and no `admin.mydeepseek.top` subdomain.** The
+  earlier plan (collapse to one domain + separate admin host, recorded in
+  `CADDY_SINGLE_DOMAIN.md`) is retired. The verified live Caddy topology is
+  kept in `deploy/Caddyfile.example` instead.
+- Admin-only features live inside the user center, gated by `role >= 10`
+  (`RequireAuth minRole`), rather than on a separate host. First shipped:
+  `/admin/users` in release `20261104-1505`.
+- Long-term goal: iterate on the user center until it **functionally replaces
+  the upstream embedded frontend**. During the transition both frontends share
+  one backend, one set of accounts and one quota ledger; hostnames are not part
+  of that goal.
+
 ## Deployment record
 
 - `2026-11-04 15:05` (Asia/Shanghai): user-center release `20261104-1505`
