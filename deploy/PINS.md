@@ -6,9 +6,9 @@ belong in this file.
 
 | Component | Repository | Pin |
 | --- | --- | --- |
-| Backend source | `a285292107s/new-api` (this fork) | branch `feature/logdelta-20261102` @ `40a658af` (upstream base `ba5f7367`) |
-| Backend image | `ghcr.io/a285292107s/new-api` | digest `sha256:12e7b5ede2533cb32b453fd492ceae31fa187d3110c475bf0a332e26298062e3` |
-| User center | `a285292107s/newapi-user-center` | commit `6eb5779` (release `20261104-1505`) |
+| Backend source | `a285292107s/new-api` (this fork) | branch `feature/logdelta-20261102` @ `07e10ec0` (upstream base `ba5f7367`) |
+| Backend image | `ghcr.io/a285292107s/new-api` | digest `sha256:1e73a66f39cc8371551ae72b30d7d5f6fa9ac598c4792b897f5def39a0f26617` |
+| User center | `a285292107s/newapi-user-center` | commit `0df958e` (release `20261105-1326`) |
 
 The image is built by `.github/workflows/custom-image.yml` from the commit above
 (amd64, tag `sha-<full-commit>` and `logdelta`). Deploy by digest, not by tag:
@@ -34,6 +34,17 @@ The image is built by `.github/workflows/custom-image.yml` from the commit above
 
 ## Deployment record
 
+- `2026-11-05 14:13` (Asia/Shanghai): backend image rebuilt from `07e10ec0` and
+  deployed by digest `sha256:1e73a66f…`. `/api/log/self/stat` now also returns
+  `requests` / `prompt_tokens` / `completion_tokens` / `total_tokens` for the
+  query range (computed in the existing indexed `logs` aggregate; `rpm`/`tpm`
+  remain the last-60s values). `health=healthy`; `/api/status`, `/api/pricing`,
+  `/` returned 200; three composite indexes present. Pre-deploy backups:
+  database `newapi-pre-ghcr-20261105-141326.sql.gz`, compose
+  `docker-compose.yml.bak-ghcr-20261105-141326`. Previous digest
+  `sha256:12e7b5ed…` kept for rollback. Verified end-to-end on a local
+  Postgres-seeded container: endpoint returned
+  `{quota:500,requests:5,prompt_tokens:15000,completion_tokens:1500,total_tokens:16500}`.
 - `2026-11-04 15:05` (Asia/Shanghai): user-center release `20261104-1505`
   deployed (commit `6eb5779`, `assets/index-BJwjqyrT.js` +
   `assets/index-0QGDq6D5.css`). Adds the admin-only `/admin/users` page
