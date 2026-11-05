@@ -699,6 +699,14 @@ type Stat struct {
 	Quota int `json:"quota"`
 	Rpm   int `json:"rpm"`
 	Tpm   int `json:"tpm"`
+	// Range-scoped token sums. Populated by SumUsedQuotaByUserId for the
+	// user-self stat endpoint so the frontend can read exact totals instead of
+	// paging through /api/log/self. They stay zero for the admin SumUsedQuota
+	// path, which keeps its original quota/rpm/tpm response shape.
+	Requests         int `json:"requests"`
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
 }
 
 func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat, err error) {
@@ -773,8 +781,12 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 // range (11.4 ms vs 5.8 ms for the two-query form at 1,943 rows), because the
 // CASE expressions cannot use the composite index for the rate part.
 func SumUsedQuotaByUserId(userId int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, channel int, group string) (stat Stat, err error) {
+	// The main aggregate carries the full requested range and filters, so it is
+	// the right place to also sum the stored token columns: they answer the same
+	// where-clause over the same rows the composite index already serves. The
+	// rate query below stays separate and pinned to the last 60 seconds.
 	tx := LOG_DB.Table("logs").
-		Select("COALESCE(sum(quota), 0) quota").
+		Select("COALESCE(sum(quota), 0) quota, count(*) requests, COALESCE(sum(prompt_tokens), 0) prompt_tokens, COALESCE(sum(completion_tokens), 0) completion_tokens").
 		Where("user_id = ? AND type = ?", userId, LogTypeConsume)
 	rpmTpmQuery := LOG_DB.Table("logs").
 		Select("count(*) rpm, COALESCE(sum(prompt_tokens), 0) + COALESCE(sum(completion_tokens), 0) tpm").
@@ -813,6 +825,7 @@ func SumUsedQuotaByUserId(userId int, startTimestamp int64, endTimestamp int64, 
 		common.SysError(common.LogText("failed to query user log stat: %s", err.Error()))
 		return stat, common.NewMessage("Failed to query statistics")
 	}
+	stat.TotalTokens = stat.PromptTokens + stat.CompletionTokens
 	var rateStat struct {
 		Rpm int
 		Tpm int
