@@ -1,18 +1,37 @@
 # Deployment pins
 
-Records which backend commit is paired with which user-center release, so the
-two repositories never drift silently. No hosts, ports, credentials or secrets
-belong in this file.
+> **本文件不再手工维护版本号。**
+>
+> 线上实际在跑的版本记录在运维仓库的 `work/versions.json` 里，由
+> `work/verify-pins.ps1` 对着服务器实测校验（容器镜像 digest、镜像
+> `org.opencontainers.image.revision` label、前端 `current` 软链、线上
+> `RELEASE.json` 的 commit）。任何一项与 `versions.json` 不符即 exit 1。
+>
+> **为什么改掉了手写表格**：从 2026-11-05 到 11-06，下面这张表在没人注意的情况下
+> 落后了 7 个前端 release 和 8 个后端提交——因为它只是给人看的注释，没有程序读它。
+> 一个不会被读取的版本记录，迟早会变成假信息。
+>
+> 因此本文件只记录**怎么部署**，不记录**正在部署什么**。本文件不含主机、端口、
+> 凭据或任何秘密，可以公开。
 
-| Component | Repository | Pin |
-| --- | --- | --- |
-| Backend source | `a285292107s/new-api` (this fork) | branch `feature/logdelta-20261102` @ `07e10ec0` (upstream base `ba5f7367`) |
-| Backend image | `ghcr.io/a285292107s/new-api` | digest `sha256:1e73a66f39cc8371551ae72b30d7d5f6fa9ac598c4792b897f5def39a0f26617` |
-| User center | `a285292107s/newapi-user-center` | commit `0df958e` (release `20261105-1326`) |
+## How the image is built and deployed
 
-The image is built by `.github/workflows/custom-image.yml` from the commit above
-(amd64, tag `sha-<full-commit>` and `logdelta`). Deploy by digest, not by tag:
-`docker pull ghcr.io/a285292107s/new-api@sha256:…`.
+The image is built by `.github/workflows/custom-image.yml` from a commit on
+`feature/logdelta-20261102` (amd64, tags `sha-<full-commit>` and `logdelta`).
+
+Deploy by digest, not by tag:
+
+```bash
+docker pull ghcr.io/a285292107s/new-api@sha256:<digest>
+```
+
+`logdelta` is a movable tag and is **not** a safe deployment reference. Only the
+digest identifies a specific image.
+
+After deploying, the operator records the digest in the ops repo's
+`versions.json` (automated by `work/deploy-backend.ps1`) and appends a line to
+`out/releases.jsonl`. Do not record it here.
+
 
 ## Frontend direction (decided 2026-11-04)
 
@@ -33,6 +52,10 @@ The image is built by `.github/workflows/custom-image.yml` from the commit above
   of that goal.
 
 ## Deployment record
+
+> 以下是 2026-11-05 及之前的历史记录，保留作为事故追溯材料。
+> **2026-11-06 起的部署记录不再写在这里**，改记在运维仓库的 `out/releases.jsonl`
+> （后端由 `deploy-backend.ps1`、前端由 `publish-frontend.ps1 -Production` 自动追加）。
 
 - `2026-11-05 14:13` (Asia/Shanghai): backend image rebuilt from `07e10ec0` and
   deployed by digest `sha256:1e73a66f…`. `/api/log/self/stat` now also returns
@@ -90,7 +113,9 @@ The user-center log page polls with
 1. Backend first: deploy the image, wait for `healthy`, check `/api/status`.
 2. Frontend second: publish the static bundle atomically
    (`releases/<ts>/` + `current` symlink).
-3. Update the table above in the same change that ships either side.
+3. After each side ships, the ops repo's `versions.json` must be updated
+   (automated by `work/deploy-backend.ps1` and `work/publish-frontend.ps1`), and
+   `work/verify-pins.ps1` must pass. Do not hand-edit anything here.
 
 ## Rollback
 
