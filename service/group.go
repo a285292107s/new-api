@@ -97,14 +97,29 @@ func FilterUserTokenAutoGroups(userGroup string, groups []string) []string {
 // global Auto list; a present (even empty) value is an explicit token snapshot.
 func GetRequestAutoGroups(c *gin.Context, userGroup string) []string {
 	value, ok := common.GetContextKey(c, constant.ContextKeyTokenAutoGroups)
+	var snapshot []string
+	if ok {
+		groups, ok := value.([]string)
+		if !ok {
+			return []string{}
+		}
+		snapshot = groups
+	}
+
+	// Registry path: resolve and filter through the snapshot, which applies the
+	// same visibility rules and lifecycle state as the rest of the group module.
+	// nil means "inherit the global list"; a non-nil empty slice is preserved as
+	// an explicit empty request and must not fall back.
+	if setting.GroupResolverUsesRegistry("routing") && model.IsGroupRegistryReady() {
+		if keys, ok := model.ResolveAutoGroupRefs(c.Request.Context(), userGroup, "auto", snapshot); ok {
+			return keys
+		}
+	}
+
 	if !ok {
 		return GetUserAutoGroup(userGroup)
 	}
-	groups, ok := value.([]string)
-	if !ok {
-		return []string{}
-	}
-	return FilterUserTokenAutoGroups(userGroup, groups)
+	return FilterUserTokenAutoGroups(userGroup, snapshot)
 }
 
 // GetGroupsEnabledModels 按 groups 顺序获取各分组启用的模型并去重
