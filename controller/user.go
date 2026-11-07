@@ -671,6 +671,13 @@ func UpdateUser(c *gin.Context) {
 			common.ApiErrorT(c, "Invalid group name: {{error}}", map[string]any{"error": err.Error()})
 			return
 		}
+		// Write-side guard: a user group must exist in the authoritative
+		// registry and accept assignments. Without this an unknown key would be
+		// silently billed at ratio 1.0.
+		if err := model.ValidateAssignableGroupKey(normalizedGroup); err != nil {
+			common.ApiErrorT(c, "Invalid group name: {{error}}", map[string]any{"error": err.Error()})
+			return
+		}
 		updatedUser.Group = normalizedGroup
 	}
 	originUser, err := model.GetUserById(updatedUser.Id, false)

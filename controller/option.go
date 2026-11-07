@@ -441,6 +441,17 @@ func UpdateOption(c *gin.Context) {
 		if err := model.EnsureSettingGroupsRegistered(); err != nil {
 			common.SysError("failed to refresh group registry: " + err.Error())
 		}
+		// The frozen embedded console still writes group settings through
+		// PUT /api/option. Mirror those writes into the authoritative registry so
+		// the new read paths never see a stale copy, then refresh the snapshot.
+		if err := model.SyncRegistryFromOptions(c.Request.Context()); err != nil {
+			common.SysError("failed to sync group registry from options: " + err.Error())
+		}
+		if service := model.CurrentGroupService(); service != nil {
+			if err := service.Rebuild(c.Request.Context()); err != nil {
+				common.SysError("failed to rebuild group snapshot: " + err.Error())
+			}
+		}
 	}
 	// 出于安全考虑只记录被修改的配置项名称，不记录配置值（可能含密钥等敏感信息）。
 	recordManageAudit(c, "option.update", map[string]any{

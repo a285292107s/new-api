@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/common/limiter"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
+	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting"
 
@@ -193,6 +194,11 @@ func ModelRequestRateLimit() func(c *gin.Context) {
 		// 其余分组共用该用户的全局计数
 		subject := strconv.Itoa(c.GetInt("id"))
 		groupTotalCount, groupSuccessCount, found := setting.GetGroupRateLimit(group)
+		if !found && model.IsGroupRegistryReady() {
+			// Registry path: per-group limits now live in group_rate_limit. Fall
+			// back to the legacy map only when the registry has no row.
+			groupTotalCount, groupSuccessCount, found = model.GroupRateLimitFor(group)
+		}
 		if found {
 			totalMaxCount = groupTotalCount
 			successMaxCount = groupSuccessCount

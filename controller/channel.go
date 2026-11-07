@@ -541,6 +541,11 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 	if err != nil {
 		return common.NewMessage("Invalid channel group: {{error}}", map[string]any{"error": err.Error()})
 	}
+	// Write-side guard: every CSV entry must be a live registry group, so a
+	// channel can never advertise a key that has no ratio configured.
+	if err := model.ValidateChannelGroupKeys(normalizedGroups); err != nil {
+		return common.NewMessage("Invalid channel group: {{error}}", map[string]any{"error": err.Error()})
+	}
 	channel.Group = normalizedGroups
 	if channel.Type == constant.ChannelTypeTaskPlugin {
 		pluginKey := strings.TrimSpace(channel.GetSetting().TaskPluginKey)

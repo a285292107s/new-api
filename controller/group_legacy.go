@@ -14,7 +14,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func GetGroups(c *gin.Context) {
+// Legacy v1 group handlers. They are the fallback path when the new group
+// service failed to initialize; the public handlers in group_v1_compat.go
+// prefer the registry and only call these when it is unavailable.
+
+func legacyGetGroups(c *gin.Context) {
 	groupNames := make([]string, 0)
 	for groupName := range ratio_setting.GetGroupRatioCopy() {
 		groupNames = append(groupNames, groupName)
@@ -26,28 +30,26 @@ func GetGroups(c *gin.Context) {
 	})
 }
 
-type GroupRegistryItem struct {
+type legacyGroupRegistryItem struct {
 	model.Group
 	References map[string]int64 `json:"references"`
 }
 
-// GetGroupRegistry returns the normalized group registry together with the
-// number of rows that still reference each group. The references column makes a
-// rename auditable: it shows which tables the rename transaction will touch.
-func GetGroupRegistry(c *gin.Context) {
+// legacyGetGroupRegistry is the pre-registry implementation.
+func legacyGetGroupRegistry(c *gin.Context) {
 	groups, err := model.ListGroups()
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	items := make([]GroupRegistryItem, 0, len(groups))
+	items := make([]legacyGroupRegistryItem, 0, len(groups))
 	for _, group := range groups {
 		references, err := model.CountGroupReferences(group.Name)
 		if err != nil {
 			common.ApiError(c, err)
 			return
 		}
-		items = append(items, GroupRegistryItem{Group: group, References: references})
+		items = append(items, legacyGroupRegistryItem{Group: group, References: references})
 	}
 	common.ApiSuccess(c, items)
 }
@@ -57,19 +59,10 @@ type renameGroupRequest struct {
 	Name string `json:"name"`
 }
 
-// RenameGroup renames a group atomically. All legacy string projections are
-// rewritten in one database transaction so no server restart or manual sweep is
-// required.
-func RenameGroup(c *gin.Context) {
-	var request renameGroupRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	if request.Id == 0 {
-		common.ApiErrorT(c, "Missing group ID")
-		return
-	}
+// legacyRenameGroup rewrites every projection in one transaction. It is kept
+// only as the fallback for a failed registry initialization; the normal path is
+// a display-name update (see group_v1_compat.go).
+func legacyRenameGroup(c *gin.Context, request renameGroupRequest) {
 	oldName, err := model.RenameGroup(request.Id, request.Name)
 	if err != nil {
 		switch {
@@ -92,14 +85,13 @@ func RenameGroup(c *gin.Context) {
 	})
 }
 
-func GetUserGroups(c *gin.Context) {
+func legacyGetUserGroups(c *gin.Context) {
 	usableGroups := make(map[string]map[string]any)
 	userGroup := ""
 	userId := c.GetInt("id")
 	userGroup, _ = model.GetUserGroup(userId, false)
 	userUsableGroups := service.GetUserUsableGroups(userGroup)
-	for groupName, _ := range ratio_setting.GetGroupRatioCopy() {
-		// UserUsableGroups contains the groups that the user can use
+	for groupName := range ratio_setting.GetGroupRatioCopy() {
 		if desc, ok := userUsableGroups[groupName]; ok {
 			usableGroups[groupName] = map[string]any{
 				"ratio": service.GetUserGroupRatio(userGroup, groupName),

@@ -252,10 +252,25 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 
 	// router/api-router.go: /api/group, /api/prefill_group
 	"GET /api/group/":               accessTokenScopeRule("group:read"),
+	"GET /api/group/registry":       accessTokenScopeRule("group:read"),
+	"POST /api/group/rename":        accessTokenScopeRule("group:write"),
 	"GET /api/prefill_group/":       accessTokenScopeRule("group:read"),
 	"POST /api/prefill_group/":      accessTokenScopeRule("group:write"),
 	"PUT /api/prefill_group/":       accessTokenScopeRule("group:write"),
 	"DELETE /api/prefill_group/:id": accessTokenScopeRule("group:write"),
+
+	// router/api-router.go: /api/v2/groups (structured registry API)
+	"GET /api/v2/groups/":                accessTokenScopeRule("group:read"),
+	"POST /api/v2/groups/":               accessTokenScopeRule("group:write"),
+	"GET /api/v2/groups/:key":            accessTokenScopeRule("group:read"),
+	"PATCH /api/v2/groups/:key":          accessTokenScopeRule("group:write"),
+	"POST /api/v2/groups/:key/status":    accessTokenScopeRule("group:write"),
+	"POST /api/v2/groups/:key/archive":   accessTokenScopeRule("group:write"),
+	"GET /api/v2/groups/:key/references": accessTokenScopeRule("group:read"),
+	"POST /api/v2/groups/:key/assign":    accessTokenScopeRule("group:write"),
+	// /api/v2/my-groups: the signed-in user's own options
+	"GET /api/v2/my-groups/options":   accessTokenScopeRule("profile:read"),
+	"GET /api/v2/my-groups/effective": accessTokenScopeRule("profile:read"),
 
 	// router/api-router.go: /api/mj, /api/task
 	"GET /api/mj/self":                 accessTokenScopeRule("usage:read"),

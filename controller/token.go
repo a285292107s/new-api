@@ -338,6 +338,12 @@ func AddToken(c *gin.Context) {
 		common.ApiErrorT(c, "Invalid token group: {{error}}", map[string]any{"error": err.Error()})
 		return
 	}
+	// Write-side guard: fixed token groups must exist and accept assignments.
+	// auto is a pseudo group and is validated by setTokenAutoGroups below.
+	if err := model.ValidateAssignableGroupKey(normalizedGroup); err != nil {
+		common.ApiErrorT(c, "Invalid token group: {{error}}", map[string]any{"error": err.Error()})
+		return
+	}
 	token.Group = normalizedGroup
 	if token.Group == "auto" {
 		if !setTokenAutoGroups(c, &token, request.AutoGroups.Groups) {
@@ -470,9 +476,16 @@ func UpdateToken(c *gin.Context) {
 			common.ApiErrorT(c, "Invalid token group: {{error}}", map[string]any{"error": err.Error()})
 			return
 		}
+		if err := model.ValidateAssignableGroupKey(normalizedGroup); err != nil {
+			common.ApiErrorT(c, "Invalid token group: {{error}}", map[string]any{"error": err.Error()})
+			return
+		}
 		cleanToken.Group = normalizedGroup
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
-		if token.Group != "auto" {
+		// Compare the normalized value, not the raw request value: a request
+		// like " auto " normalizes to auto and must not be treated as a fixed
+		// group (which would clear the token's auto order).
+		if cleanToken.Group != "auto" {
 			cleanToken.CrossGroupRetry = false
 			_ = cleanToken.SetAutoGroups(nil)
 		} else if request.AutoGroups.Set {

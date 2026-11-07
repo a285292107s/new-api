@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/relayconvert/reasoning"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -45,6 +46,30 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) hostty
 	if exists {
 		logger.LogDebug(ctx, "final group: %s", autoGroup)
 		relayInfo.UsingGroup = autoGroup.(string)
+	}
+
+	if setting.GroupResolverUsesRegistry("billing") && model.IsGroupRegistryReady() {
+		// Registry path: same numbers, but read from the authoritative snapshot
+		// instead of the options projection.
+		//
+		// A missing group must fail closed. Pricing an unknown key at 1.0 was the
+		// original P0; GroupRatio=-1 is the sentinel callers already check for
+		// "price unavailable", so a dangling users.group can never quietly bill
+		// full price.
+		ratio, ok := model.UserGroupRatioForBillingStrict(ctx.Request.Context(), relayInfo.UserGroup, relayInfo.UsingGroup)
+		if !ok {
+			groupRatioInfo.GroupRatio = -1
+			groupRatioInfo.GroupSpecialRatio = -1
+			return groupRatioInfo
+		}
+		if special, ok := model.SpecialUserGroupRatio(ctx.Request.Context(), relayInfo.UserGroup, relayInfo.UsingGroup); ok {
+			groupRatioInfo.GroupSpecialRatio = special
+			groupRatioInfo.GroupRatio = special
+			groupRatioInfo.HasSpecialRatio = true
+			return groupRatioInfo
+		}
+		groupRatioInfo.GroupRatio = ratio
+		return groupRatioInfo
 	}
 
 	// check user group special ratio

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"maps"
 	"strconv"
 	"strings"
@@ -200,6 +201,28 @@ func InitOptionMap() {
 	// must be seeded after the database options are applied.
 	if err := EnsureGroupsInitialized(); err != nil {
 		common.SysError(common.LogText("failed to initialize group registry: %s", err.Error()))
+	}
+	// The new authoritative registry is additive: table creation, first-run
+	// seeding and snapshot build must all succeed before any read path is
+	// allowed to use it. Failures are logged rather than fatal so a broken new
+	// table can never prevent the legacy code from starting.
+	if err := migrateGroupRegistry(); err != nil {
+		common.SysError(common.LogText("failed to migrate group registry: %s", err.Error()))
+		return
+	}
+	if err := EnsureGroupRegistrySeeded(); err != nil {
+		common.SysError(common.LogText("failed to seed group registry: %s", err.Error()))
+		return
+	}
+	if err := InitGroupService(); err != nil {
+		common.SysError(common.LogText("failed to initialize group service: %s", err.Error()))
+	} else if service := CurrentGroupService(); service != nil {
+		// Project the registry back into the legacy option keys so both the new
+		// read paths and the frozen console see the same values from the first
+		// request after startup.
+		if err := service.ProjectToOptions(context.Background()); err != nil {
+			common.SysError(common.LogText("failed to project group registry to options: %s", err.Error()))
+		}
 	}
 }
 

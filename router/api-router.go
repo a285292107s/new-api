@@ -367,6 +367,30 @@ func SetApiRouter(router *gin.Engine) {
 			groupRoute.POST("/rename", controller.RenameGroup)
 		}
 
+		// v2 group API: structured, versioned, and the only write path for the
+		// authoritative registry. v1 above stays a compatibility adapter.
+		groupV2Route := apiRouter.Group("/v2/groups")
+		groupV2Route.Use(middleware.AdminAuth())
+		{
+			groupV2Route.GET("/", controller.GetGroupsV2)
+			groupV2Route.POST("/", controller.CreateGroupV2)
+			groupV2Route.GET("/:key", controller.GetGroupV2)
+			groupV2Route.PATCH("/:key", controller.UpdateGroupV2)
+			groupV2Route.POST("/:key/status", controller.ChangeGroupStatusV2)
+			groupV2Route.POST("/:key/archive", controller.ArchiveGroupV2)
+			groupV2Route.GET("/:key/references", controller.GetGroupReferencesV2)
+			groupV2Route.POST("/:key/assign", controller.AssignGroupV2)
+		}
+
+		// User-facing group reads live under a separate prefix so the admin
+		// `/:key` wildcard cannot shadow them.
+		myGroupRoute := apiRouter.Group("/v2/my-groups")
+		myGroupRoute.Use(middleware.UserAuth())
+		{
+			myGroupRoute.GET("/options", controller.GetUserGroupOptionsV2)
+			myGroupRoute.GET("/effective", controller.GetEffectiveGroupV2)
+		}
+
 		prefillGroupRoute := apiRouter.Group("/prefill_group")
 		prefillGroupRoute.Use(middleware.AdminAuth())
 		{
